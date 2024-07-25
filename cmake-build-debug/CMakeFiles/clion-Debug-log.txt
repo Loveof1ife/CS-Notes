@@ -1,4 +1,0 @@
-/home/qbli10/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/qbli10/.local/share/JetBrains/Toolbox/apps/clion/bin/ninja/linux/x64/ninja -G Ninja -S /home/qbli10/codes/DataStructure_Algorithms/GraphLib -B /home/qbli10/codes/DataStructure_Algorithms/GraphLib/cmake-build-debug
--- Configuring done (0.0s)
--- Generating done (0.0s)
--- Build files have been written to: /home/qbli10/codes/DataStructure_Algorithms/GraphLib/cmake-build-debug
