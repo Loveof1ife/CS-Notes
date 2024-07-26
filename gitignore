@@ -1,0 +1,19 @@
+# Ignore build directories
+build/
+cmake-build-debug/
+
+# Ignore CMake files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+CMakeLists.txt.user
+cmake_install.cmake
+Makefile
+
+# Ignore IDE specific files
+.idea/
+.vscode/
+
+# Ignore log files
+*.log
+

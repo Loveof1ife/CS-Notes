@@ -12,7 +12,8 @@ if(NOT MSVC)
 endif()
 
 # Create a library target for the graph module
-add_library(directed_graph_to_dot STATIC directed_graph_to_dot.cpp directed_graph.cpp graph_node.cpp)
+add_library(directed_graph_to_dot STATIC
+        directed_graph_to_dot.cpp directed_graph.cpp graph_node.cpp directed_graph_iterator.cpp)
 
 # Ensure the library is compiled with modules support
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")

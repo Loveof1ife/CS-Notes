@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <memory>
 #include <set>
+#include <vector>
 
 namespace Graph
 {
@@ -18,12 +19,13 @@ namespace details
               graph_node(std::shared_ptr<directed_graph<T> > graph, T&& t);
 
               [[nodiscard]] T& value() noexcept;
-              [[nodiscard]]  const T& value() const noexcept;
+              [[nodiscard]] const T& value() const noexcept;
 
               bool operator==(const graph_node&) const = default;
 
        private:
               friend class directed_graph<T>;
+
               std::shared_ptr<directed_graph<T> > m_graph;
               T m_data;
 
