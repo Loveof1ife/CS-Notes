@@ -1,5 +1,5 @@
 
-关于 B b = 42; 为什么是隐式转换的解释
+一.关于 B b = 42; 为什么是隐式转换的解释
 
 B b = 42; 这种写法在 C++ 中实际上执行了隐式转换，具体过程如下：
 
@@ -52,3 +52,27 @@ struct Explicit {
 Implicit i = 42;  // OK
 Explicit e = 42;  // 错误
 Explicit e2(42);  // OK
+
+include ""和<>的区别
+#include <header>
+
+二.用于系统/标准库头文件（如 <iostream>、<vector>）。
+
+编译器在标准库路径（如 /usr/include、MSVC 的 include 目录）中查找文件。
+
+示例：
+
+cpp
+#include <iostream>  // 标准库头文件
+#include <vector>
+#include "header"
+
+用于用户自定义头文件（如 "myclass.h"）。
+
+编译器先在当前目录（或指定的 -I 包含路径）查找，找不到再回退到标准库路径。
+
+示例：
+
+cpp
+#include "myclass.h"  // 用户自定义头文件
+#include "../utils/helper.h"  // 相对路径
