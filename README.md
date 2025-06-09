@@ -110,6 +110,9 @@ ConstArrayAccessor1<Vector3D> ParticleSystemData3::forces() const {
 避免使用 `const auto&` 接受函数按值返回的轻量对象。
 
 
+以下是你需要的 **Markdown (`README.md`) 格式** 的记录内容，已经结构清晰、适合直接复制进项目文档中使用：
+
+````markdown
 ## 🔧 Jet 求解器继承与调用逻辑概览
 
 ---
@@ -124,6 +127,103 @@ public:
 protected:
     virtual void onUpdate(const Frame& frame) = 0;  // 子类实现核心更新逻辑
 };
+````
+
+> 外部通过 `update(frame)` 推进帧，内部转发调用子类的 `onUpdate(frame)`。
+
+---
+
+### 2. `PhysicsAnimation`：时间推进控制器
+
+```cpp
+class PhysicsAnimation : public Animation {
+protected:
+    void onUpdate(const Frame& frame) override;
+    virtual void onAdvanceTimeStep(double timeIntervalInSeconds) = 0;
+};
+```
+
+#### 🧠 核心逻辑流程：
+
+* 判断是否进入新帧（`frame.index > _currentFrame.index`）
+* 若是，调用 `advanceTimeStep(...)`：
+
+  * 固定子步长模式：`_numberOfFixedSubTimeSteps`
+  * 自适应子步长模式：`numberOfSubTimeSteps(...)`
+* 每个子步长调用：
+
+  ```cpp
+  onAdvanceTimeStep(actualTimeInterval);  // 延迟至子类实现
+  ```
+
+---
+
+### 3. `ParticleSystemSolver3`：粒子系统求解器
+
+```cpp
+class ParticleSystemSolver3 : public PhysicsAnimation {
+protected:
+    void onAdvanceTimeStep(double timeStepInSeconds) override;
+};
+```
+
+#### ⚙️ 实现核心时间推进：
+
+```cpp
+void ParticleSystemSolver3::onAdvanceTimeStep(double timeStepInSeconds) {
+    beginAdvanceTimeStep(timeStepInSeconds);
+
+    accumulateForces(timeStepInSeconds);
+    timeIntegration(timeStepInSeconds);
+    resolveCollision();
+
+    endAdvanceTimeStep(timeStepInSeconds);
+}
+```
+
+---
+
+### 4. `SphSolver3`：基于 SPH 的求解器
+
+```cpp
+class SphSolver3 : public ParticleSystemSolver3 {
+protected:
+    void accumulateForces(double timeStepInSeconds) override;
+};
+```
+
+#### 💡 实现 SPH 专属的力累积逻辑：
+
+```cpp
+void SphSolver3::accumulateForces(double timeStepInSeconds) {
+    accumulateNonPressureForces(timeStepInSeconds);
+    accumulatePressureForce(timeStepInSeconds);
+}
+```
+
+---
+
+### ✅ 调用链总结
+
+```text
+Animation::update() 
+  └─▶ PhysicsAnimation::onUpdate()
+        └─▶ advanceTimeStep(...)
+              └─▶ onAdvanceTimeStep(...)        // ParticleSystemSolver3 实现
+                    └─▶ accumulateForces(...)  // SphSolver3 实现
+```
+
+---
+
+### 🧩 设计思路说明：
+
+* `Animation` 提供统一的帧调度接口。
+* `PhysicsAnimation` 封装了时间推进逻辑（固定 / 自适应子步长）。
+* `ParticleSystemSolver3` 实现了粒子推进步骤的框架。
+* `SphSolver3` 重载具体力学模型，聚焦物理细节。
+
+```
+```
 
 
 
