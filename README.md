@@ -109,8 +109,8 @@ ConstArrayAccessor1<Vector3D> ParticleSystemData3::forces() const {
 使用 `auto f = forces();` 或 `const auto f = forces();`
 避免使用 `const auto&` 接受函数按值返回的轻量对象。
 
-
-### Jet 求解器继承与调用逻辑概览
+## 计算机图形学
+### 一、Jet 求解器继承与调用逻辑概览
 
 ---
 
