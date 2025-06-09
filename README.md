@@ -110,3 +110,21 @@ ConstArrayAccessor1<Vector3D> ParticleSystemData3::forces() const {
 避免使用 `const auto&` 接受函数按值返回的轻量对象。
 
 
+## 🔧 Jet 求解器继承与调用逻辑概览
+
+---
+
+### 1. `Animation`：基础动画驱动类
+
+```cpp
+class Animation {
+public:
+    void update(const Frame& frame);  // 外部调用入口
+
+protected:
+    virtual void onUpdate(const Frame& frame) = 0;  // 子类实现核心更新逻辑
+};
+
+
+
+
