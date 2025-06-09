@@ -110,14 +110,11 @@ ConstArrayAccessor1<Vector3D> ParticleSystemData3::forces() const {
 避免使用 `const auto&` 接受函数按值返回的轻量对象。
 
 
-以下是你需要的 **Markdown (`README.md`) 格式** 的记录内容，已经结构清晰、适合直接复制进项目文档中使用：
-
-````markdown
-## 🔧 Jet 求解器继承与调用逻辑概览
+### Jet 求解器继承与调用逻辑概览
 
 ---
 
-### 1. `Animation`：基础动画驱动类
+#### 1. `Animation`：基础动画驱动类
 
 ```cpp
 class Animation {
@@ -133,7 +130,7 @@ protected:
 
 ---
 
-### 2. `PhysicsAnimation`：时间推进控制器
+#### 2. `PhysicsAnimation`：时间推进控制器
 
 ```cpp
 class PhysicsAnimation : public Animation {
@@ -158,7 +155,7 @@ protected:
 
 ---
 
-### 3. `ParticleSystemSolver3`：粒子系统求解器
+#### 3. `ParticleSystemSolver3`：粒子系统求解器
 
 ```cpp
 class ParticleSystemSolver3 : public PhysicsAnimation {
@@ -183,7 +180,7 @@ void ParticleSystemSolver3::onAdvanceTimeStep(double timeStepInSeconds) {
 
 ---
 
-### 4. `SphSolver3`：基于 SPH 的求解器
+#### 4. `SphSolver3`：基于 SPH 的求解器
 
 ```cpp
 class SphSolver3 : public ParticleSystemSolver3 {
@@ -203,7 +200,7 @@ void SphSolver3::accumulateForces(double timeStepInSeconds) {
 
 ---
 
-### ✅ 调用链总结
+#### ✅ 调用链总结
 
 ```text
 Animation::update() 
@@ -215,7 +212,7 @@ Animation::update()
 
 ---
 
-### 🧩 设计思路说明：
+#### 🧩 设计思路说明：
 
 * `Animation` 提供统一的帧调度接口。
 * `PhysicsAnimation` 封装了时间推进逻辑（固定 / 自适应子步长）。
