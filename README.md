@@ -222,6 +222,122 @@ Animation::update()
 ```
 ```
 
+二、Jet-Debug编译出错：
+
+---
+
+## ✅ 结论：`src/python` 中绑定模块使用了 Debug 模式编译，但依赖了 Python 的 Release ABI，导致 `_invalid_parameter` 等 Debug CRT 符号缺失错误
+
+---
+
+## 🔍 原因分析（逐点解释）
+
+### ✅ 你注释掉这两行就没有报错：
+
+```cmake
+# add_subdirectory(external/pybind11)
+# add_subdirectory(src/python)
+```
+
+这表明问题**确实发生在 `src/python` 模块，也就是 pybind11 Python 绑定模块中**。
+
+### ✅ 为什么 Debug 会出错，但 Release 没问题？
+
+* Python 的官方发行版（如 Anaconda、系统自带的 python.exe）**始终以 Release 模式编译（/MD）**；
+* 当你 `CMAKE_BUILD_TYPE=Debug` 并启用 `src/python`，你的 `pyjet` 模块将尝试以 `/MDd` 编译；
+* 这样会导致你的模块链接 Debug CRT（Debug C Runtime），但 Python 是 Release CRT，这两者 ABI 不兼容；
+* 由于 `_invalid_parameter` 是 Debug CRT 的一部分，而主工程是以 Release ABI 构建的，导致找不到这个符号。
+
+**这是 pybind11 模块编译时最常见的坑之一。**
+
+---
+
+## ✅ 解决方案（推荐优先级顺序）
+
+---
+
+### ✅ 方法一（最推荐）：
+
+**Python 模块只使用 Release 模式编译，不允许 Debug 模式构建 pyjet**
+
+#### 步骤：
+
+在 `src/python/CMakeLists.txt` 或 `CMakeLists.txt` 主文件里添加：
+
+```cmake
+# 若为 Debug 构建，跳过 Python 模块
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_subdirectory(src/python)
+endif()
+```
+
+这样能保证只有 Release 构建时编译 Python 模块，规避 ABI 冲突。
+
+---
+
+### ✅ 方法二：在 `pyjet` 模块强制使用 `/MD`（Release ABI）
+
+在 `src/python/CMakeLists.txt` 的 `add_library(pyjet ...)` 后添加：
+
+```cmake
+if (MSVC)
+    target_compile_options(pyjet PRIVATE /MD)  # 不使用 Debug CRT
+endif()
+```
+
+这样你即使整体 Debug 编译，Python 模块仍然链接 Release CRT，**匹配 Python ABI**。
+
+⚠️ 风险：运行时调试困难（因为它不是 Debug 模式了），但可以正常工作。
+
+---
+
+### ✅ 方法三（补丁）：强制声明 `_invalid_parameter`（临时）
+
+```cpp
+extern "C" void __cdecl _invalid_parameter(
+    const wchar_t* expression,
+    const wchar_t* function,
+    const wchar_t* file,
+    unsigned int line,
+    uintptr_t pReserved
+) {}
+```
+
+虽然可以绕过编译错误，但不推荐用在生产环境，只用于紧急 unblock。
+
+---
+
+## 🛠️ 建议的标准策略（推荐写法）：
+
+你可以把主 `CMakeLists.txt` 末尾那几行修改为：
+
+```cmake
+# Python Binding only builds in Release mode (to match Python ABI)
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_subdirectory(external/pybind11)
+    add_subdirectory(src/python)
+else()
+    message(WARNING "Skipping Python bindings in Debug mode (ABI mismatch with Python).")
+endif()
+```
+
+这样能保证 Debug 模式不构建 Python 模块，避免出错，且信息提示明确。
+
+---
+
+## ✅ 总结表
+
+| 方案                           | 是否推荐 | 修复效果      | 对调试的影响     |
+| ---------------------------- | ---- | --------- | ---------- |
+| ✅ 跳过 Debug 构建 Python 模块      | 强烈推荐 | 完全修复      | 无影响        |
+| ✅ Python 模块强制 `/MD`          | 推荐   | 修复 95% 情况 | 无法调试 pyjet |
+| ⚠️ 手动声明 `_invalid_parameter` | 临时可用 | 能编译       | 不推荐长期使用    |
+
+---
+
+是否需要我帮你修改现有 `src/python/CMakeLists.txt` 来自动检测并避免 Debug 模式构建？
+
+
 
 
 
