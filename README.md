@@ -1,7 +1,106 @@
 ## C++ 语法要点笔记整理
 
 ---
-### 值返回与const reference
+### 四、模板特化
+好的，我们来**逐步剖析 C++ 模板特化类的编译过程**，特别是你给的这个结构：
+
+---
+
+## 📌 背景代码（你提供的模板结构）
+
+```cpp
+// 通用模板：只用于 N ≠ 1/2/3 的情况，会立即报错
+template <typename T, typename R, size_t N>
+class LinearArraySampler final {
+    static_assert(N < 1 || N > 3, "Not implemented - N should be either 1, 2 or 3.");
+};
+
+// 特化版本：提供合法实现
+template <typename T, typename R>
+class LinearArraySampler<T, R, 3> final {
+    // 实现内容
+};
+```
+
+---
+
+## 🧠 编译器处理模板特化的过程
+
+当你写：
+
+```cpp
+LinearArraySampler<double, double, 3> sampler(...);
+```
+
+### 编译器的执行流程：
+
+1. **查找匹配的模板声明**：
+
+   * 编译器看到你实例化的是 `LinearArraySampler<double, double, 3>`；
+   * 它先尝试匹配特化版本：`LinearArraySampler<T, R, 3>` ✅ **匹配成功**
+
+2. **生成特化类定义的实例代码**：
+
+   * 编译器用 `T = double`, `R = double` 来生成 `LinearArraySampler<double, double, 3>` 的完整类；
+   * 使用的是你专门定义的那一套成员变量和成员函数；
+   * `通用模板` 中的 `static_assert` **不会被使用**（因为没匹配到它）；
+
+✅ **成功编译**
+
+---
+
+### 反过来，如果你写：
+
+```cpp
+LinearArraySampler<double, double, 4> badSampler;
+```
+
+则编译器行为如下：
+
+1. **查找匹配的模板**：
+
+   * 没有 `N=4` 的特化类；
+   * 匹配默认模板 `template <typename T, typename R, size_t N>`；
+
+2. **实例化默认模板版本**：
+
+   * 会触发：
+
+     ```cpp
+     static_assert(N < 1 || N > 3, "Not implemented - N should be either 1, 2 or 3.");
+     ```
+
+   * 代入 N=4，不满足断言 → **编译失败**
+
+---
+
+## ⚙️ 编译器机制本质上是这样处理的：
+
+| 步骤                           | 行为                   |
+| ---------------------------- | -------------------- |
+| 1. 语法检查                      | 找到你调用了哪一版模板或特化       |
+| 2. 匹配模板                      | 优先匹配特化版本，若无则用通用模板    |
+| 3. 实例化模板                     | 把类型参数代入后生成实际代码       |
+| 4. 执行 `static_assert` 等编译期检查 |                      |
+| 5. 编译                        | 成功则进入编译输出阶段，失败则终止并报错 |
+
+---
+
+## 🔍 编译器选择特化的策略（重要）
+
+* **完全匹配优先**：`LinearArraySampler<T, R, 3>` 会**优先于** `LinearArraySampler<T, R, N>`；
+* **部分特化需要精确匹配**；
+* **static\_assert 常用于阻断通用模板实例化**，防止你在没实现的参数组合下误用模板。
+
+---
+
+## ✅ 总结一句话
+
+> 模板特化的编译过程，是“先精确匹配特化，再退回通用模板”，若匹配了通用模板而你用了 `static_assert` 限制非法参数，就会 **在模板实例化阶段编译报错**。
+
+如果你愿意，我可以用一个简单的代码实验帮助你可视化整个过程（含 N=1/N=3/N=4 三种调用结果）。是否要展示？
+
+### 三、值返回与const reference
 
 ---
 
