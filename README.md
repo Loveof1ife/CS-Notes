@@ -335,7 +335,101 @@ endif()
 
 ---
 
-是否需要我帮你修改现有 `src/python/CMakeLists.txt` 来自动检测并避免 Debug 模式构建？
+三、design of VectorField3D：
+**虚函数+闭包（lambda）+函数对象返回**的组合设计
+
+---
+
+## ✅ 类定义：`VectorField3`
+
+```cpp
+class VectorField3 : public Field3 {
+public:
+    virtual Vector3D sample(const Vector3D& x) const = 0;
+    virtual double divergence(const Vector3D& x) const;
+    virtual Vector3D curl(const Vector3D& x) const;
+    virtual std::function<Vector3D(const Vector3D&)> sampler() const;
+};
+```
+
+它定义了一个**三维向量场抽象基类**，其中最核心的抽象接口是：
+
+```cpp
+virtual Vector3D sample(const Vector3D& x) const = 0;
+```
+
+用于表示“在任意点 `x` 处采样向量场的值”。
+
+---
+
+## ✅ 成员函数实现：`sampler()`
+
+```cpp
+std::function<Vector3D(const Vector3D&)> VectorField3::sampler() const {
+    const VectorField3* self = this;
+    return [self](const Vector3D& x) -> Vector3D {
+        return self->sample(x);  // 实际调用 virtual 函数
+    };
+}
+```
+
+### 🧠 本质上返回的是：
+
+一个可以像普通函数一样调用的对象（function object），其行为等价于：
+
+```cpp
+f(x) = this->sample(x);
+```
+
+但关键点是：
+
+> **它保留了多态性**，即会调用子类中真正实现的 `sample()`。
+
+---
+
+## 🔍 模式解读：虚函数绑定 + Lambda 封装
+
+| 部分                                         | 含义                                   |
+| ------------------------------------------ | ------------------------------------ |
+| `std::function<Vector3D(const Vector3D&)>` | 表示一个函数对象：输入 `Vector3D`，输出 `Vector3D` |
+| `[self](const Vector3D& x)`                | 捕获当前对象 `this` 指针，并在 lambda 中使用       |
+| `self->sample(x)`                          | 会根据实际类型（子类）进行虚函数分发                   |
+| 返回 std::function                           | 封装并暴露一个高阶“采样器函数”                     |
+
+---
+
+## ✅ 使用场景
+
+```cpp
+VectorField3* field = new SomeConcreteField();
+auto f = field->sampler();
+Vector3D value = f(Vector3D(1.0, 2.0, 3.0));  // 像函数一样调用
+```
+
+无需关心 field 的具体类型，只要它实现了 `sample()`，就可以通过 `f(x)` 进行多态采样，非常适用于：
+
+* 积分器中传入采样函数；
+* 并行计算中传值调用；
+* 调试可视化回调。
+
+---
+
+## 🧩 类比理解
+
+这个设计相当于把一个**虚方法变成了函数对象**，从“**对象方法**”抽象为“**函数接口**”，增强了代码的灵活性和兼容性。
+
+---
+
+## ✅ 小结
+
+| 优点                   | 描述                     |
+| -------------------- | ---------------------- |
+| ✔ 封装采样行为为函数对象        | 便于传递和调用                |
+| ✔ 保留虚函数多态特性          | 支持运行时分发到子类的 `sample()` |
+| ✔ 与 std::function 兼容 | 可用于算法、容器、并发任务等函数式接口    |
+
+---
+
 
 
 
