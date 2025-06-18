@@ -1,6 +1,217 @@
 ## C++ 语法要点笔记整理
 
 ---
+### 五、小规模流体引擎中的并行计算
+你整理了从 `ScalarGrid3::_data.forEachIndex(func)` 到 `parallelFor(...)` 的完整调用链，并提出了核心问题：
+
+> ScalarGrid3 的 `_data` 是私有的 `Array3<double>`，调用 `forEachDataPointIndex(func)` 时，**内部是如何实现并行遍历每个 `(i,j,k)` 索引**的？它如何传到 `parallelFor(...)` 最终调度多线程？
+
+---
+
+## ✅ 简要结论
+
+是的，整个调用链是**完整且正确转发的**，并通过模板 + λ闭包，将 `func(i,j,k)` 成功传递到最底层的并行执行。下面是你整理的流程的精确解析：
+
+---
+
+## 🔁 整体调用链结构图
+
+```text
+ScalarGrid3::forEachDataPointIndex(func)
+ └── _data.forEachIndex(func)
+      └── Array3<T>::forEachIndex(func)
+           └── accessor().forEachIndex(func)
+                └── ConstArrayAccessor<T,3>::forEachIndex(func)
+                     └── for loop 或 parallelFor(...) 调度线程
+```
+
+如果你调用 `parallelForEachIndex`，则走：
+
+```text
+ScalarGrid3::parallelForEachDataPointIndex(func)
+ └── _data.parallelForEachIndex(func)
+      └── Array3<T>::parallelForEachIndex(func)
+           └── accessor().parallelForEachIndex(func)
+                └── ConstArrayAccessor<T,3>::parallelForEachIndex(func)
+                     └── parallelFor(x0,x1,y0,y1,z0,z1, func)
+                          └── parallelFor(z0,z1, lambda(k) { for j.. for i.. func(i,j,k) })
+                               └── 执行线程分派（OpenMP, TBB, std::thread）
+```
+
+---
+
+## 💡 核心机制详解
+
+### 1. `_data` 是 `Array3<double>`
+
+```cpp
+Array3<double> _data;
+```
+
+### 2. `Array3<T>` 调用 `parallelForEachIndex(func)`：
+
+```cpp
+template <typename Callback>
+void Array<T, 3>::parallelForEachIndex(Callback func) {
+    accessor().parallelForEachIndex(func);
+}
+```
+
+此时 `accessor()` 返回 `ArrayAccessor<T,3>` 或 `ConstArrayAccessor<T,3>`，持有 `_data` 的指针和尺寸信息。
+
+---
+
+### 3. `ConstArrayAccessor<T,3>::parallelForEachIndex(func)`
+
+```cpp
+template <typename Callback>
+void ConstArrayAccessor<T, 3>::parallelForEachIndex(Callback func) const {
+    parallelFor(
+        kZeroSize, _size.x, kZeroSize, _size.y, kZeroSize, _size.z,
+        func);
+}
+```
+
+这里是三维并行入口，最终转为：
+
+```cpp
+parallelFor(beginZ, endZ, [&](IndexType k) {
+    for (IndexType j = beginY; j < endY; ++j) {
+        for (IndexType i = beginX; i < endX; ++i) {
+            func(i, j, k);
+        }
+    }
+});
+```
+
+---
+
+### 4. `parallelFor(start, end, lambda, policy)` 决定使用哪种并发后端：
+
+* `JET_TASKING_TBB` ➜ `tbb::parallel_for(start, end, func)`
+* `JET_TASKING_OPENMP` ➜ `#pragma omp parallel for`
+* `JET_TASKING_CPP11THREADS` ➜ `std::thread` 池
+* fallback ➜ 顺序执行
+
+---
+
+## 📌 所以你的 `func(i, j, k)` 是如何执行的？
+
+以最终这一句为例：
+
+```cpp
+parallelFor(z_start, z_end, [&](IndexType k) {
+    for (IndexType j = y_start; j < y_end; ++j)
+        for (IndexType i = x_start; i < x_end; ++i)
+            func(i, j, k);  // << 你传进来的 lambda 在这里被调用
+});
+```
+
+这个 `func(i,j,k)` 就是你在最上层写的用户逻辑，例如：
+
+```cpp
+grid.parallelForEachDataPointIndex([](size_t i, size_t j, size_t k) {
+    grid(i,j,k) += 1.0;
+});
+```
+
+---
+
+
+| 项目                                                               | 内容                                                   |
+| ---------------------------------------------------------------- | ---------------------------------------------------- |
+| `_data` 是私有的 `Array3<double>`                                    | ✅ 但类的成员函数内部可以访问                                      |
+| `parallelForEachDataPointIndex` 调用了 `_data.parallelForEachIndex` | ✅                                                    |
+| `parallelForEachIndex` 最终调用并行 `for(i,j,k)`                       | ✅ 多线程执行                                              |
+| 多线程由谁控制？                                                         | ✅ 由 `ExecutionPolicy` 选定（TBB / OpenMP / std::thread） |
+| `func(i,j,k)` 何时触发？                                              | ✅ 在最底层的 lambda(k){ for j, for i } 中触发调用              |
+
+
+> 这个 `func(i, j, k)` **只是一个索引函数**，那它最终是“作用到哪个数据上”的？
+
+我们现在就来解释这个关键点：
+
+---
+
+## ✅ TL;DR：
+
+**`func(i, j, k)` 是用户自定义的 lambda，它自己通过 `(i, j, k)` 去访问数据，比如 `_data(i,j,k)`，并不是 `parallelForEachIndex` 自动访问的。**
+
+---
+
+## 🔍 1. 框架本身只提供“并行访问的模板”
+
+```cpp
+template <typename Callback>
+void ConstArrayAccessor<T, 3>::parallelForEachIndex(Callback func) const {
+    parallelFor(kZeroSize, _size.x, kZeroSize, _size.y, kZeroSize, _size.z, func);
+}
+```
+
+这段代码的本质含义是：
+
+> “我不关心你用索引做什么，我只负责把每个 `(i, j, k)` 提供给你。”
+
+---
+
+## 🧠 2. 数据访问逻辑写在你自己的 `func` 里
+
+你自己写的 lambda 决定了数据的访问。例如：
+
+```cpp
+grid.parallelForEachDataPointIndex(
+    [&](size_t i, size_t j, size_t k) {
+        _data(i, j, k) += 1.0;
+    });
+```
+
+这个 `_data(i, j, k)` 才是真正访问数据的地方。这个表达式会触发：
+
+```cpp
+T& operator()(size_t i, size_t j, size_t k);
+```
+
+它会计算：
+
+```cpp
+return _data[i + _size.x * (j + _size.y * k)];
+```
+
+也就是说，**数据是你自己通过索引去访问的**，库的设计者只提供“并行索引调用”的框架。
+
+---
+
+## 🧩 举个完整例子
+
+```cpp
+ScalarGrid3 grid;
+grid.resize(32, 32, 32);
+
+grid.parallelForEachDataPointIndex([&](size_t i, size_t j, size_t k) {
+    grid(i, j, k) = static_cast<double>(i + j + k);
+});
+```
+
+其中这句：
+
+```cpp
+grid(i, j, k)
+```
+
+会转发给 `_data(i,j,k)`，触发一维数组 `_data[]` 的线性寻址访问。
+
+---
+
+## ✅ 总结一下
+
+| 组件                           | 职责                                |
+| ---------------------------- | --------------------------------- |
+| `parallelForEachIndex(func)` | 负责调度并行索引 `(i,j,k)`，不管你对它干嘛        |
+| `func(i,j,k)`                | 你自己定义：访问数据？写入？累加？随便你              |
+| `_data(i,j,k)`               | 通过索引将 `(i,j,k)` 映射到线性数组，真正读取或写入数据 |
+
+
+
 ### 四、模板特化
 好的，我们来**逐步剖析 C++ 模板特化类的编译过程**，特别是你给的这个结构：
 
