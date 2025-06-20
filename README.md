@@ -1,6 +1,8 @@
 ## C++ 语法要点笔记整理
 
 ---
+### 六、dynamic_pointer_cast
+将一个 shared_ptr<Base> 安全地转换为 shared_ptr<Derived>，如果原始对象确实是 Derived 类型，就返回新的 shared_ptr<Derived>，否则返回一个空指针（nullptr）。
 ### 五、小规模流体引擎中的并行计算
 你整理了从 `ScalarGrid3::_data.forEachIndex(func)` 到 `parallelFor(...)` 的完整调用链，并提出了核心问题：
 
